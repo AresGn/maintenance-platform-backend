@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
 import os
 
 app = FastAPI(
@@ -16,6 +18,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Modèles Pydantic
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    role: str
+
+# OAuth2 scheme
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+
+# Utilisateurs de test (en dur pour commencer)
+USERS_DB = {
+    "admin": {"id": 1, "username": "admin", "password": "admin123", "role": "admin"},
+    "super1": {"id": 2, "username": "super1", "password": "super123", "role": "supervisor"},
+    "tech1": {"id": 3, "username": "tech1", "password": "tech123", "role": "technician"}
+}
 
 @app.get("/")
 async def root():
@@ -36,6 +62,44 @@ async def health_check():
 @app.get("/test")
 async def test():
     return {"test": "success", "message": "Test endpoint working"}
+
+# Routes d'authentification
+@app.post("/api/auth/login", response_model=TokenResponse)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = USERS_DB.get(form_data.username)
+    if not user or user["password"] != form_data.password:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Générer un token simple (en production, utilisez JWT)
+    token = f"token_{user['username']}_{user['id']}"
+    return {"access_token": token, "token_type": "bearer"}
+
+@app.get("/api/auth/me", response_model=UserResponse)
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    # Décoder le token simple (en production, utilisez JWT)
+    if not token.startswith("token_"):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    try:
+        parts = token.split("_")
+        username = parts[1]
+        user_id = int(parts[2])
+
+        user = USERS_DB.get(username)
+        if not user or user["id"] != user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        return UserResponse(
+            id=user["id"],
+            username=user["username"],
+            role=user["role"]
+        )
+    except (IndexError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 if __name__ == "__main__":
     import uvicorn
