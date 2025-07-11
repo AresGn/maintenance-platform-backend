@@ -91,6 +91,18 @@ class DashboardStats(BaseModel):
     pending_maintenances: int
     completed_maintenances: int
 
+class MaintenanceEvent(BaseModel):
+    id: int
+    title: str
+    start: str
+    end: str
+    equipment_id: Optional[int]
+    equipment_name: Optional[str]
+    type: str  # 'preventive', 'corrective', 'inspection'
+    status: str  # 'scheduled', 'in_progress', 'completed', 'cancelled'
+    technician: Optional[str]
+    description: Optional[str]
+
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
@@ -376,6 +388,53 @@ async def get_sites(db: Session = Depends(get_db) if DATABASE_AVAILABLE else Non
                 updated_at="2025-01-01T00:00:00Z"
             )
         ]
+
+# Routes de maintenance
+@app.get("/api/v1/maintenance/calendar", response_model=List[MaintenanceEvent])
+async def get_maintenance_calendar(
+    start_date: str,
+    end_date: str,
+    db: Session = Depends(get_db) if DATABASE_AVAILABLE else None
+):
+    try:
+        if DATABASE_AVAILABLE and db:
+            # TODO: Implémenter la récupération depuis la DB
+            # maintenances = db.query(Maintenance).filter(
+            #     Maintenance.scheduled_date.between(start_date, end_date)
+            # ).all()
+            pass
+
+        # Données de test pour le calendrier
+        from datetime import datetime, timedelta
+        import random
+
+        # Générer quelques événements de test
+        events = []
+        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+
+        # Créer quelques événements de maintenance
+        for i in range(5):
+            event_date = start + timedelta(days=random.randint(0, (end - start).days))
+            events.append(MaintenanceEvent(
+                id=i + 1,
+                title=f"Maintenance {['Préventive', 'Corrective', 'Inspection'][i % 3]}",
+                start=event_date.isoformat(),
+                end=(event_date + timedelta(hours=2)).isoformat(),
+                equipment_id=random.randint(1, 7),
+                equipment_name=f"Équipement {random.randint(1, 7)}",
+                type=['preventive', 'corrective', 'inspection'][i % 3],
+                status=['scheduled', 'in_progress', 'completed'][i % 3],
+                technician=f"Technicien {random.randint(1, 3)}",
+                description=f"Description de la maintenance {i + 1}"
+            ))
+
+        return events
+
+    except Exception as e:
+        print(f"Erreur lors de la récupération du calendrier: {e}")
+        # Retourner une liste vide en cas d'erreur
+        return []
 
 if __name__ == "__main__":
     import uvicorn
