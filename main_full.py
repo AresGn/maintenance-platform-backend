@@ -10,7 +10,11 @@ try:
     from app.core.database import get_db
     from app.core.security import verify_password, create_access_token
     from app.models.user import User
+    from app.models.equipment import Equipment
+    from app.models.site import Site
+    from app.models.production_line import ProductionLine
     from sqlalchemy.orm import Session
+    from typing import List, Optional
     DATABASE_AVAILABLE = True
 except ImportError:
     DATABASE_AVAILABLE = False
@@ -51,6 +55,41 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: str
     updated_at: str
+
+class EquipmentResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    status: str
+    location: Optional[str]
+    site_id: Optional[int]
+    production_line_id: Optional[int]
+    created_at: str
+    updated_at: str
+
+class EquipmentCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    status: str = "active"
+    location: Optional[str] = None
+    site_id: Optional[int] = None
+    production_line_id: Optional[int] = None
+
+class SiteResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    location: Optional[str]
+    created_at: str
+    updated_at: str
+
+class DashboardStats(BaseModel):
+    total_equipment: int
+    active_equipment: int
+    maintenance_equipment: int
+    out_of_service_equipment: int
+    pending_maintenances: int
+    completed_maintenances: int
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
@@ -168,6 +207,147 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         )
     except (IndexError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
+
+# Routes d'équipements
+@app.get("/api/equipment", response_model=List[EquipmentResponse])
+async def get_equipment(db: Session = Depends(get_db) if DATABASE_AVAILABLE else None):
+    if DATABASE_AVAILABLE and db:
+        equipment = db.query(Equipment).all()
+        return [
+            EquipmentResponse(
+                id=eq.id,
+                name=eq.name,
+                description=eq.description,
+                status=eq.status,
+                location=eq.location,
+                site_id=eq.site_id,
+                production_line_id=eq.production_line_id,
+                created_at=eq.created_at.isoformat() if eq.created_at else "2025-01-01T00:00:00Z",
+                updated_at=eq.updated_at.isoformat() if eq.updated_at else "2025-01-01T00:00:00Z"
+            ) for eq in equipment
+        ]
+    else:
+        # Données de test
+        return [
+            EquipmentResponse(
+                id=1,
+                name="Compresseur A1",
+                description="Compresseur principal ligne 1",
+                status="active",
+                location="Atelier A",
+                site_id=1,
+                production_line_id=1,
+                created_at="2025-01-01T00:00:00Z",
+                updated_at="2025-01-01T00:00:00Z"
+            ),
+            EquipmentResponse(
+                id=2,
+                name="Convoyeur B2",
+                description="Convoyeur ligne 2",
+                status="maintenance",
+                location="Atelier B",
+                site_id=1,
+                production_line_id=2,
+                created_at="2025-01-01T00:00:00Z",
+                updated_at="2025-01-01T00:00:00Z"
+            )
+        ]
+
+@app.post("/api/equipment", response_model=EquipmentResponse)
+async def create_equipment(equipment_data: EquipmentCreate, db: Session = Depends(get_db) if DATABASE_AVAILABLE else None):
+    if DATABASE_AVAILABLE and db:
+        equipment = Equipment(
+            name=equipment_data.name,
+            description=equipment_data.description,
+            status=equipment_data.status,
+            location=equipment_data.location,
+            site_id=equipment_data.site_id,
+            production_line_id=equipment_data.production_line_id
+        )
+        db.add(equipment)
+        db.commit()
+        db.refresh(equipment)
+
+        return EquipmentResponse(
+            id=equipment.id,
+            name=equipment.name,
+            description=equipment.description,
+            status=equipment.status,
+            location=equipment.location,
+            site_id=equipment.site_id,
+            production_line_id=equipment.production_line_id,
+            created_at=equipment.created_at.isoformat() if equipment.created_at else "2025-01-01T00:00:00Z",
+            updated_at=equipment.updated_at.isoformat() if equipment.updated_at else "2025-01-01T00:00:00Z"
+        )
+    else:
+        # Mode test
+        return EquipmentResponse(
+            id=999,
+            name=equipment_data.name,
+            description=equipment_data.description,
+            status=equipment_data.status,
+            location=equipment_data.location,
+            site_id=equipment_data.site_id,
+            production_line_id=equipment_data.production_line_id,
+            created_at="2025-01-01T00:00:00Z",
+            updated_at="2025-01-01T00:00:00Z"
+        )
+
+# Route dashboard
+@app.get("/api/dashboard/stats", response_model=DashboardStats)
+async def get_dashboard_stats(db: Session = Depends(get_db) if DATABASE_AVAILABLE else None):
+    if DATABASE_AVAILABLE and db:
+        total_equipment = db.query(Equipment).count()
+        active_equipment = db.query(Equipment).filter(Equipment.status == "active").count()
+        maintenance_equipment = db.query(Equipment).filter(Equipment.status == "maintenance").count()
+        out_of_service_equipment = db.query(Equipment).filter(Equipment.status == "out_of_service").count()
+
+        return DashboardStats(
+            total_equipment=total_equipment,
+            active_equipment=active_equipment,
+            maintenance_equipment=maintenance_equipment,
+            out_of_service_equipment=out_of_service_equipment,
+            pending_maintenances=0,  # TODO: implémenter
+            completed_maintenances=0  # TODO: implémenter
+        )
+    else:
+        # Données de test
+        return DashboardStats(
+            total_equipment=25,
+            active_equipment=20,
+            maintenance_equipment=3,
+            out_of_service_equipment=2,
+            pending_maintenances=5,
+            completed_maintenances=15
+        )
+
+# Route sites
+@app.get("/api/sites", response_model=List[SiteResponse])
+async def get_sites(db: Session = Depends(get_db) if DATABASE_AVAILABLE else None):
+    if DATABASE_AVAILABLE and db:
+        sites = db.query(Site).all()
+        return [
+            SiteResponse(
+                id=site.id,
+                name=site.name,
+                description=site.description,
+                location=site.location,
+                created_at=site.created_at.isoformat() if site.created_at else "2025-01-01T00:00:00Z",
+                updated_at=site.updated_at.isoformat() if site.updated_at else "2025-01-01T00:00:00Z"
+            ) for site in sites
+        ]
+    else:
+        # Données de test
+        return [
+            SiteResponse(
+                id=1,
+                name="Site Principal",
+                description="Site de production principal",
+                location="Paris, France",
+                created_at="2025-01-01T00:00:00Z",
+                updated_at="2025-01-01T00:00:00Z"
+            )
+        ]
 
 if __name__ == "__main__":
     import uvicorn
