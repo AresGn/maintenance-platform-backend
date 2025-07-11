@@ -436,6 +436,56 @@ async def get_maintenance_calendar(
         # Retourner une liste vide en cas d'erreur
         return []
 
+# Routes lignes de production
+@app.get("/api/v1/production-lines")
+async def get_production_lines(db: Session = Depends(get_db) if DATABASE_AVAILABLE else None):
+    try:
+        if DATABASE_AVAILABLE and db:
+            # TODO: Implémenter la récupération depuis la DB
+            pass
+
+        # Données de test
+        return [
+            {"id": 1, "name": "Ligne de production A", "site_id": 1, "status": "active"},
+            {"id": 2, "name": "Ligne de production B", "site_id": 1, "status": "active"},
+            {"id": 3, "name": "Ligne de production C", "site_id": 1, "status": "maintenance"}
+        ]
+    except Exception as e:
+        print(f"Erreur lors de la récupération des lignes de production: {e}")
+        return []
+
+# Routes sites (version v1 pour compatibilité)
+@app.get("/api/v1/sites")
+async def get_sites_v1(db: Session = Depends(get_db) if DATABASE_AVAILABLE else None):
+    try:
+        if DATABASE_AVAILABLE and db:
+            sites = db.query(Site).all()
+            return [
+                {
+                    "id": site.id,
+                    "name": site.name,
+                    "description": getattr(site, 'description', None),
+                    "location": getattr(site, 'location', None),
+                    "created_at": site.created_at.isoformat() if hasattr(site, 'created_at') and site.created_at else "2025-01-01T00:00:00Z",
+                    "updated_at": site.updated_at.isoformat() if hasattr(site, 'updated_at') and site.updated_at else "2025-01-01T00:00:00Z"
+                } for site in sites
+            ]
+        else:
+            # Données de test
+            return [
+                {
+                    "id": 1,
+                    "name": "Site Principal",
+                    "description": "Site de production principal",
+                    "location": "Paris, France",
+                    "created_at": "2025-01-01T00:00:00Z",
+                    "updated_at": "2025-01-01T00:00:00Z"
+                }
+            ]
+    except Exception as e:
+        print(f"Erreur lors de la récupération des sites v1: {e}")
+        return []
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
