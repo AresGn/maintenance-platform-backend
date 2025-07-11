@@ -78,6 +78,35 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     token = f"token_{user['username']}_{user['id']}"
     return {"access_token": token, "token_type": "bearer"}
 
+# Route alternative pour le frontend (accepte JSON)
+@app.post("/api/auth/login-json")
+async def login_json(credentials: LoginRequest):
+    user = USERS_DB.get(credentials.username)
+    if not user or user["password"] != credentials.password:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password"
+        )
+
+    # Générer un token simple
+    token = f"token_{user['username']}_{user['id']}"
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 3600,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "email": f"{user['username']}@maintenance.com",
+            "first_name": user["username"].title(),
+            "last_name": "User",
+            "role": user["role"],
+            "is_active": True,
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z"
+        }
+    }
+
 @app.get("/api/auth/me", response_model=UserResponse)
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     # Décoder le token simple (en production, utilisez JWT)
